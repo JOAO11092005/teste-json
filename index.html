@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Viewer PRO</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+
+    <style>
+        :root {
+            --primary-color: #9400d3;
+            --secondary-color: #00bfff;
+            --glow-color: rgba(148, 0, 211, 0.7);
+            --dark-bg: rgba(10, 5, 20, 0.7);
+            --font-family: 'Orbitron', sans-serif;
+            --border-radius: 16px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-family);
+            /* A imagem de fundo e a animação foram removidas e substituídas por um gradiente sutil */
+            background-color: #0a0514;
+            background-image: radial-gradient(ellipse at center, #1b102f 0%, #0a0514 70%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        main {
+            backdrop-filter: blur(10px);
+            background-color: var(--dark-bg);
+            padding: 40px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 0 35px var(--glow-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            width: clamp(300px, 90vw, 650px);
+            border: 2px dashed #444; /* Borda para indicar área de drop */
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        main.drag-over {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 45px var(--secondary-color);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: var(--secondary-color);
+            text-shadow: 0 0 15px var(--secondary-color);
+        }
+
+        .button-container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+
+        button {
+            background: transparent;
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+            font-family: var(--font-family);
+            font-size: 1.1em;
+            padding: 14px 28px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 12px var(--glow-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        button:hover:not(:disabled) {
+            color: white;
+            background-color: var(--primary-color);
+            transform: scale(1.05);
+            box-shadow: 0 0 25px var(--glow-color);
+        }
+        button:disabled { cursor: not-allowed; opacity: 0.5; }
+        .loader-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            display: none;
+            animation: spin 1s linear infinite;
+        }
+        button.loading .loader-spinner { display: block; }
+        button.loading .btn-text { display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px);
+            z-index: 1000; display: flex; justify-content: center; align-items: center;
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        #modal-overlay.visible { opacity: 1; visibility: visible; }
+        
+        #modal-content {
+            background-color: #1e1e1e;
+            border-radius: var(--border-radius); border: 1px solid var(--primary-color);
+            box-shadow: 0 0 40px var(--glow-color); width: 90%; max-width: 900px; height: 90%;
+            max-height: 90vh; position: relative; display: flex; flex-direction: column;
+            transform: scale(0.95); transition: transform 0.3s ease;
+        }
+        #modal-overlay.visible #modal-content { transform: scale(1); }
+
+        .modal-header {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        #file-info { flex-grow: 1; font-size: 0.8em; color: #aaa; }
+        #file-info span { margin-right: 15px; }
+        #file-info strong { color: var(--secondary-color); }
+
+        #search-input {
+            background: #333; border: 1px solid #555; border-radius: 8px;
+            color: white; padding: 8px 12px; font-family: var(--font-family);
+        }
+        #copy-btn { padding: 8px 15px; font-size: 0.9em; }
+
+        #close-modal-btn {
+            position: absolute; top: 10px; right: 15px; background: none; border: none;
+            color: #888; font-size: 2.5rem; line-height: 1; cursor: pointer;
+            transition: color 0.3s ease, transform 0.3s ease;
+        }
+        #close-modal-btn:hover { color: var(--primary-color); transform: scale(1.1); }
+        
+        .modal-body { flex-grow: 1; overflow: auto; padding: 20px; }
+        .modal-body pre { height: 100%; margin: 0; background: transparent; }
+        .highlight { background-color: rgba(0, 191, 255, 0.3); border-radius: 3px; }
+
+    </style>
+</head>
+<body>
+    
+    <main id="drop-zone">
+        <h1>JSON Viewer PRO</h1>
+        <p style="color: #aaa; text-align: center;">Clique para carregar ou arraste um arquivo .json aqui</p>
+        <div class="button-container">
+            <button id="btn-pessoal" onclick="loadJSONFromUrl('./filme.json', this)">
+                <span class="btn-text">JSON Pessoal</span>
+                <div class="loader-spinner"></div>
+            </button>
+            <button id="btn-toaru" onclick="loadJSONFromUrl('./toaru.json', this)">
+                <span class="btn-text">JSON Toaru</span>
+                <div class="loader-spinner"></div>
+            </button>
+        </div>
+    </main>
+
+    <div id="modal-overlay">
+        <div id="modal-content">
+            <header class="modal-header">
+                <div id="file-info"></div>
+                <input type="text" id="search-input" placeholder="Buscar no JSON...">
+                <button id="copy-btn">
+                    <span class="btn-text">Copiar</span>
+                    <div class="loader-spinner"></div>
+                </button>
+            </header>
+            <div class="modal-body">
+                <pre><code id="json-in-modal" class="language-json"></code></pre>
+            </div>
+            <button id="close-modal-btn">&times;</button>
+        </div>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const jsonInModal = document.getElementById('json-in-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const fileInfoPanel = document.getElementById('file-info');
+        const searchInput = document.getElementById('search-input');
+        const copyBtn = document.getElementById('copy-btn');
+        let originalJsonString = '';
+
+        // --- Core Functions ---
+        function openModal() { modalOverlay.classList.add('visible'); }
+        function closeModal() { modalOverlay.classList.remove('visible'); }
+
+        function toggleButtonLoading(button, isLoading) {
+            button.classList.toggle('loading', isLoading);
+            button.disabled = isLoading;
+        }
+
+        function displayJson(data, { name = 'N/A', size = -1 } = {}) {
+            originalJsonString = JSON.stringify(data, null, 2);
+            jsonInModal.innerHTML = originalJsonString; // Use innerHTML for search highlighting
+            Prism.highlightElement(jsonInModal);
+
+            const keyCount = countKeys(data);
+            const depth = getDepth(data);
+            const formattedSize = size === -1 ? 'N/A' : `${(size / 1024).toFixed(2)} KB`;
+
+            fileInfoPanel.innerHTML = `
+                <span>Arquivo: <strong>${name}</strong></span>
+                <span>Tamanho: <strong>${formattedSize}</strong></span>
+                <span>Chaves: <strong>${keyCount}</strong></span>
+                <span>Profundidade: <strong>${depth}</strong></span>
+            `;
+            openModal();
+        }
+
+        // --- Data Loading ---
+        async function loadJSONFromUrl(url, button) {
+            toggleButtonLoading(button, true);
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const blob = await (await fetch(url)).blob(); // Fetch again to get size
+                displayJson(data, { name: url.split('/').pop(), size: blob.size });
+            } catch (err) {
+                alert(`Erro ao carregar JSON: ${err.message}`);
+            } finally {
+                toggleButtonLoading(button, false);
+            }
+        }
+
+        function loadJSONFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    displayJson(data, { name: file.name, size: file.size });
+                } catch (err) {
+                    alert(`Erro: O arquivo "${file.name}" não é um JSON válido.`);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Event Listeners ---
+        closeModalBtn.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', e => e.target === modalOverlay && closeModal());
+        document.addEventListener('keydown', e => e.key === 'Escape' && modalOverlay.classList.contains('visible') && closeModal());
+        
+        // Drag & Drop
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length) {
+                const file = e.dataTransfer.files[0];
+                if (file.type === 'application/json' || file.name.endsWith('.json')) {
+                    loadJSONFromFile(file);
+                } else {
+                    alert('Por favor, arraste apenas arquivos .json');
+                }
+            }
+        });
+        
+        // Search
+        searchInput.addEventListener('input', () => {
+            const term = searchInput.value;
+            if (!term) {
+                jsonInModal.innerHTML = originalJsonString;
+            } else {
+                const regex = new RegExp(term, 'gi');
+                const highlightedJson = originalJsonString.replace(regex, match => `<mark class="highlight">${match}</mark>`);
+                jsonInModal.innerHTML = highlightedJson;
+            }
+            Prism.highlightElement(jsonInModal);
+        });
+
+        // Copy
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(originalJsonString).then(() => {
+                const originalText = copyBtn.querySelector('.btn-text').textContent;
+                copyBtn.querySelector('.btn-text').textContent = 'Copiado!';
+                copyBtn.style.borderColor = '#00ff7f';
+                setTimeout(() => {
+                    copyBtn.querySelector('.btn-text').textContent = originalText;
+                    copyBtn.style.borderColor = 'var(--primary-color)';
+                }, 2000);
+            });
+        });
+
+        // --- Utility Functions ---
+        const countKeys = obj => { let count = 0; for(let key in obj) { if (obj.hasOwnProperty(key)) count++; if(typeof obj[key] === 'object' && obj[key] !== null) count += countKeys(obj[key]); } return count; };
+        const getDepth = obj => { let depth = 1; if(typeof obj === 'object' && obj !== null) { for(let key in obj) { if (obj.hasOwnProperty(key)) { let tempDepth = getDepth(obj[key]) + 1; if (tempDepth > depth) depth = tempDepth; } } } return depth; };
+
+    </script>
+</body>
+</html>
